@@ -1,0 +1,8 @@
+# private stuff
+/meta/*
+
+# boot
+/.nrepl-*
+
+# vim
+*.swp
