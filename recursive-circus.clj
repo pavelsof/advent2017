@@ -2,30 +2,22 @@
 
 
 (defn read-input
+  "return 2 dicts mapping names, one to sets of other names, another to weights"
   [file]
-
-  (defn parse-name-and-weight
-    [string]
-    (let [matches (rest (re-find #"([a-z]+) \((\d+)\)" string))]
-      {:name (first matches)
-       :weight (clojure.edn/read-string (second matches))}))
-
-  (defn parse-holding
-    [string]
-    {:holding (if (nil? string) #{}
-                (into #{} (clojure.string/split string #", ")))})
-
-  (defn parse-line
-    [line]
-    (let [parts (clojure.string/split line #" -> ")]
-      (into (parse-name-and-weight (first parts))
-            (parse-holding (second parts)))))
-
-  (reduce (fn [{:keys [forest weights]} {:keys [name weight holding]}]
-            {:forest (assoc forest name holding)
-             :weights (assoc weights name weight)})
+  (reduce (fn [{:keys [forest weights]} line]
+            (let [matches (rest (re-find #"([a-z]+) \((\d+)\)( -> ([a-z, ]+))?" line))]
+              {:forest (assoc forest
+                              (first matches)
+                              (if (nil? (last matches))
+                                #{}
+                                (into #{}
+                                      (clojure.string/split (last matches)
+                                                            #", "))))
+               :weights (assoc weights
+                               (first matches)
+                               (clojure.edn/read-string (second matches)))}))
           {:forest {} :weights {}}
-          (map parse-line (clojure.string/split-lines (slurp file)))))
+          (clojure.string/split-lines (slurp file))))
 
 
 (defn find-ungrafted
@@ -36,9 +28,8 @@
       (if (set? node)
         path
         (first (drop-while nil?
-                           (map (fn [[k v]] (find-ungrafted forest
-                                                            (conj path k)))
-                                node)))))))
+                           (map (fn [k] (find-ungrafted forest (conj path k)))
+                                (keys node))))))))
 
 
 (defn graft
@@ -66,13 +57,44 @@
      (find-paths root-name (root root-name))))
   ([node-name children]
    (if (map? children)
-     (map (fn [path] (into [node-name] path))
-          (reduce (fn [res [k v]] (into res (find-paths k v))) [[]] children))
+     (concat (map (fn [path] (into [node-name] path))
+                  (reduce (fn [res [k v]] (into res (find-paths k v)))
+                          [] children))
+             (list [node-name]))
      (list [node-name]))))
 
 
-; solution
+(defn non-conforming-key
+  "given a dict that has all values equal but for one, get the key to that one"
+  [dict]
+  (let [sorted (sort-by val dict)]
+    (if (= (first (vals sorted)) (second (vals sorted)))
+      (last (keys sorted))
+      (first (keys sorted)))))
+
+
+(defn find-should-be-weight
+  "find the solution to part 2"
+  [tree weights]
+  (loop [total-weights {} paths (find-paths tree)]
+    (let [path (first paths) node-name (last path) children (get-in tree path)]
+      (if (and (not (empty? children))
+               (not (apply = (map (fn [k] (total-weights k)) (keys children)))))
+        (let [problem-node (non-conforming-key (into {}
+                                                     (map (fn [x] [x (total-weights x)])
+                                                          (keys children))))]
+          (+ (weights problem-node)
+             (- (total-weights (first (filter (fn [k] (not (= k problem-node)))
+                                              (keys children))))
+                (total-weights problem-node))))
+        (recur (assoc total-weights
+                      node-name
+                      (reduce (fn [weight child] (+ weight (total-weights child)))
+                              (weights node-name) (keys children)))
+               (rest paths))))))
+
+
 (let [{:keys [forest weights]} (read-input input-file)]
   (let [tree (build-tree forest)]
     (println (first (keys tree)))
-    (find-paths tree)))
+    (println (find-should-be-weight tree weights))))
