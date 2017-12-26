@@ -73,11 +73,16 @@
                   numbers)))
 
 
+(defn knot-hash
+  [input]
+  (hexadecimate (condense (multi-knit (range 256)
+                                      (into (string->ascii input) [17 31 73 47 23])))))
+
+
 ; part one
 (println (apply * (take 2 (:knot (knit (range 256)
                                        (parse-input input)
                                        0 0)))))
 
 ; part two
-(println (hexadecimate (condense (multi-knit (range 256)
-                                             (into (string->ascii input) [17 31 73 47 23])))))
+(println (knot-hash input))
